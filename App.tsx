@@ -12,6 +12,10 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [showRegistry, setShowRegistry] = useState(false);
+  const [registry, setRegistry] = useState<{ users: Record<string, unknown>; agents: Record<string, unknown> }>({
+    users: {},
+    agents: {}
+  });
 
   // Form State
   const [user, setUser] = useState<UserData>({ 
@@ -37,6 +41,14 @@ const App: React.FC = () => {
 
   // Field errors
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (currentStep === Step.SUCCESS && showRegistry) {
+      api.getRegistry()
+        .then((data) => setRegistry(data))
+        .catch((err) => setError(err.message));
+    }
+  }, [currentStep, showRegistry]);
 
   const validateEmail = (email: string) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -133,6 +145,12 @@ const App: React.FC = () => {
       .then(res => {
         setAgentId(res.agent_id);
         setCurrentStep(Step.SUCCESS);
+        return api.getRegistry();
+      })
+      .then((data) => {
+        if (data) {
+          setRegistry(data);
+        }
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
@@ -230,7 +248,6 @@ const App: React.FC = () => {
         );
 
       case Step.SUCCESS:
-        const registry = api.getRegistry();
         return (
           <div className="text-center py-6 animate-bounceIn overflow-y-auto max-h-[85vh]">
             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
