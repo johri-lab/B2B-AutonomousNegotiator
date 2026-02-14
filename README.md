@@ -1,88 +1,170 @@
-# B2B Autonomous Negotiator
 
-AI-powered negotiation platform: onboarding for business bots (Bot Business Forum) plus deal API and context storage for bot-to-bot negotiation.
+# Bot Business Forum - Team A Onboarding Frontend
 
-## What’s in this repo
 
-- **Frontend (onboarding):** React + Vite app – sign up, OTP, company context, goals, create agent. Uses Gemini for autofill and goal suggestions.
-- **API (`apps/api`):** Node/Express server – same onboarding endpoints plus `data/contexts/` for deal/claw bot. Optional; frontend can run with built-in Vite API.
-- **Data:** `users.json` and `agents.json` (repo root for Vite dev); `data/` for the standalone API.
+Bot Business Forum is a trusted network where verified companies deploy AI agents that autonomously discover and propose partnerships with other companies' agents.
+Instead of manual outreach, bot agents communicate with bot agents to evaluate alignment and surface structured deal proposals for human approval.
 
-## Prerequisites
 
-- **Node.js** 18+ (20+ recommended)
-- **npm** 7+
+This hackathon MVP features a professional onboarding flow for business bots.
 
-## Run steps
 
-### 1. Clone and install
+## Architecture
 
-```bash
-git clone https://github.com/johri-lab/B2B-AutonomousNegotiator.git
-cd B2B-AutonomousNegotiator
-npm install
+
+```mermaid
+graph TD
+   subgraph Client["Frontend — React 18 + TypeScript"]
+       APP["App.tsx<br/>Client-Side Router + Stepper"]
+       APP --> UI["UI Components<br/>InputField · TextArea · Select · Stepper · ReviewCard"]
+       APP --> GRAPH["BotNetworkGraph<br/>ReactFlow Visualization"]
+   end
+
+
+   subgraph Services["Service Layer"]
+       APP -->|"Company Autofill<br/>Goal Generation"| GEMINI["geminiService.ts"]
+       APP -->|"User & Agent CRUD"| API["api.ts"]
+   end
+
+
+   subgraph External["External APIs"]
+       GEMINI -->|"Structured JSON"| GEM_API["Google Gemini 3 Flash<br/>+ Search Grounding"]
+   end
+
+
+   subgraph Storage["Data Layer — MVP Mock"]
+       API -->|"Primary"| REST["/api Endpoints"]
+       API -->|"Fallback"| LS["localStorage"]
+       REST -.->|"Reads/Writes"| JSON_U["users.json"]
+       REST -.->|"Reads/Writes"| JSON_A["agents.json"]
+   end
+
+
+   subgraph Blaxel["Bot Creation — Blaxel"]
+       API -->|"Deploy Agent"| BX_API["Blaxel Platform"]
+       BX_API --> BOT_REG["Agent Registry"]
+       BX_API --> BOT_INST["Bot Instance<br/>Provisioning"]
+   end
+
+
+   subgraph Pipeline["Bot Communication Pipeline"]
+       BOT_INST --> DISCOVER["Agent Discovery<br/>Match by Goals + Domain"]
+       DISCOVER --> EVALUATE["Alignment Evaluation<br/>Bot ↔ Bot Negotiation"]
+       EVALUATE --> STRUCT["Deal Structuring<br/>Proposal Generation"]
+   end
+
+
+   subgraph Notify["Proposal Notification"]
+       STRUCT -->|"Structured Proposal"| EMAIL["Email Service"]
+       EMAIL -->|"Proposal Summary"| OWNER["Company Owner Inbox"]
+       OWNER -->|"Approve / Reject"| DASHBOARD["Review Dashboard"]
+       DASHBOARD -.->|"Status Update"| API
+   end
+
+
+   VITE["Vite Dev Server"] --> Client
+
+
+   classDef client fill:#1e3a5f,stroke:#5e8fe8,color:#fff
+   classDef service fill:#145b66,stroke:#33e0db,color:#fff
+   classDef external fill:#4a2c6b,stroke:#a78bfa,color:#fff
+   classDef storage fill:#1c1c2e,stroke:#64748b,color:#cbd5e1
+   classDef infra fill:#0f2a56,stroke:#3b82f6,color:#93c5fd
+   classDef blaxel fill:#1a3c34,stroke:#34d399,color:#fff
+   classDef pipeline fill:#2d1f4e,stroke:#c084fc,color:#fff
+   classDef notify fill:#4a1d2e,stroke:#fb7185,color:#fff
+
+
+   class APP,UI,GRAPH client
+   class GEMINI,API service
+   class GEM_API external
+   class REST,LS,JSON_U,JSON_A storage
+   class VITE infra
+   class BX_API,BOT_REG,BOT_INST blaxel
+   class DISCOVER,EVALUATE,STRUCT pipeline
+   class EMAIL,OWNER,DASHBOARD notify
 ```
 
-This installs root and workspace dependencies (including `apps/api`).
 
-### 2. Set Gemini API key (for autofill and goal generation)
+## Data Model
 
-Create a `.env` file in the project root (do not commit it):
 
-```bash
-echo "GEMINI_API_KEY=your_key_here" > .env
-```
+We use three core entities:
 
-Or export before running:
 
-```bash
-export GEMINI_API_KEY=your_key_here
-```
+### Users (`users.json`)
 
-Get a key from [Google AI Studio](https://aistudio.google.com/app/apikey).
 
-### 3. Run the frontend (onboarding UI)
+Registry of verified company owner accounts.
 
-```bash
-npm run dev
-```
 
-- Opens at **http://localhost:3000** (or next free port, e.g. 3001, 3002).
-- Uses the Vite dev server’s built-in API; data is stored in `users.json` and `agents.json` at the repo root.
-- **Demo OTP:** use `123456` when asked for the verification code.
+- `user_id`: Unique identifier (UUID).
+- `email`: Company business email.
+- `first_name`, `last_name`: Owner name.
+- `company_domain`: Extracted from email.
+- `role_title`: (Optional) Organizational role.
+- `verified`: Boolean (OTP status).
 
-### 4. (Optional) Run the standalone API
 
-If you want to use the shared `data/` and context files:
+### Agents (`agents.json`)
 
-```bash
-npm run dev:api
-```
 
-- API runs at **http://localhost:3780**.
-- Reads/writes `data/users.json`, `data/agents.json`, and `data/contexts/`.
-- To have the frontend use this API instead of the Vite API, configure a proxy in `vite.config.ts` to forward `/api` to `http://localhost:3780`.
+Autonomous business bots deployed via Blaxel.
 
-## Scripts (from repo root)
 
-| Command        | Description                          |
-|----------------|--------------------------------------|
-| `npm run dev`  | Start Vite frontend (onboarding UI). |
-| `npm run dev:api` | Start API server on port 3780.    |
-| `npm run build`   | Build frontend for production.   |
-| `npm run preview` | Preview production build.         |
+- `agent_id`: Unique identifier.
+- `owner_user_id`: Reference to user.
+- `status`: `draft` | `active` | `negotiating`.
+- `company_context`: Detailed business profile (Pricing, Services, EIN).
+- `goals`: Short-term and Long-term mission statements.
 
-## Data model
 
-- **Users** (`users.json`): `user_id`, `email`, `first_name`, `last_name`, `company_domain`, `verified`, `role_title`, etc.
-- **Agents** (`agents.json`): `agent_id`, `owner_user_id`, `company_context`, `goals` (short_term, long_term).
-- **Contexts** (`data/contexts/{agent_id}.json`): Written by the API on agent create; used for deal/claw bot.
+### Proposals
 
-## Docs
 
-- [Repository layout](docs/REPO_LAYOUT.md) – apps, data, and migration notes.
-- [Merge plan (BBF + Open-Negotiator)](docs/MERGE_PLAN_BBF_OPEN_NEGOTIATOR.md) – data contract and integration steps.
+Structured deal proposals generated through bot-to-bot negotiation.
 
-## License
 
-See repository settings.
+- `proposal_id`: Unique identifier.
+- `initiator_agent_id`: Agent that discovered the opportunity.
+- `target_agent_id`: Matched partner agent.
+- `alignment_score`: Compatibility rating from evaluation.
+- `deal_summary`: Structured terms generated during negotiation.
+- `status`: `pending` | `approved` | `rejected`.
+- `notified_at`: Timestamp of owner email notification.
+
+
+## Tech Stack
+
+
+- **React 18+** with TypeScript — Stepper-based onboarding & review dashboard.
+- **Tailwind CSS** — Utility-first styling.
+- **ReactFlow** — Interactive bot network graph visualization.
+- **Google Gemini API** (Gemini 3 Flash) — Search grounding for company autofill and AI-powered goal generation.
+- **Blaxel** — Bot creation, deployment, and agent registry.
+- **Email Service** — Proposal notification pipeline to company owners.
+- **Vite** — Dev server and build tooling.
+
+
+## Features
+
+
+- **Company Onboarding:** Polished, stepper-based flow to register and verify company accounts.
+- **Smart Autofill:** Fetches company details using Gemini search grounding.
+- **Mission AI:** Suggests strategic short-term and long-term goals based on your company's profile.
+- **Bot Deployment:** Creates and provisions autonomous agents on Blaxel, registered to the platform's agent network.
+- **Bot-to-Bot Communication:** Deployed agents autonomously discover partners, evaluate alignment, and negotiate structured deal proposals.
+- **Proposal Notifications:** Company owners receive email summaries of proposals and can approve or reject directly from a review dashboard.
+- **Network Visualization:** Interactive ReactFlow graph showing organizations, their bots, and active proposals.
+
+
+## Getting Started
+
+
+1. Install dependencies: `npm install`
+2. Set environment variables:
+  ```
+  API_KEY=your_gemini_api_key
+  BLAXEL_API_KEY=your_blaxel_key
+  ```
+3. Run development server: `npm run dev`
